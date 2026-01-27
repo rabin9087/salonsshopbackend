@@ -8,6 +8,17 @@ import { otpRateLimiter } from '../middleware/rateLimit.js';
 import { prisma } from '../lib/prisma.js';
 import { sendOtp } from '../lib/twilio.js';
 
+interface JWTPayload {
+  userId: string;
+  phone: string | null;
+  roles: string[];
+  salonMemberships: {
+    salonId: string;
+    role: string;
+  }[];
+}
+  
+
 const router = Router();
 
 // Validation schemas
@@ -149,9 +160,9 @@ router.post('/verify-otp', asyncHandler(async (req, res) => {
           phone: user.phone,
           roles: roles.map(r => r.role),
           salonMemberships: memberships.map(m => ({ salonId: m.salonId, role: m.role })),
-        },
-        process.env.JWT_SECRET || '', // Ensure JWT_SECRET is defined
-        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } // Ensure options are correctly structured
+        } satisfies JWTPayload,
+        process.env.JWT_SECRET as string, // Ensure JWT_SECRET is defined and typed
+        { expiresIn: '60d' } // Ensure options are correctly structured
       );
 
   res.json({
