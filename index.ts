@@ -2,10 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
-import { errorHandler } from './middleware/errorHandler.js';
+import { errorHandler } from './src/middleware/errorHandler.js';
 import mongoSanitize from "express-mongo-sanitize";
 import morgan from "morgan";
-import router from '../src/routes/router.index.js'
+import router from './src/routes/router.index.js'
 
 // Load environment variables
 dotenv.config();
