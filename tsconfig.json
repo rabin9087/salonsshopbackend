@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "typeRoots": ["./node_modules/@types"],
     "esModuleInterop": true,
     "strict": true,
     "skipLibCheck": true,
@@ -16,7 +17,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
-    }
+    },
   },
   "include": ["src/**/*", "src/index.ts"],
   "exclude": ["node_modules", "dist"]
