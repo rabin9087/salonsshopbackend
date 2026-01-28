@@ -541,7 +541,7 @@ router.post('/:salonId/slots/generate', authMiddleware, asyncHandler(async (req:
 
   const result = await prisma.slot.createMany({
     data: slotsToCreate,
-    skipDuplicates: true,
+    // skipDuplicates is not supported in this context, remove it
   });
 
   res.json({ 

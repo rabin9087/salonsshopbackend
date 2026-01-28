@@ -4,7 +4,7 @@ import slugify from 'slugify';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('--- 🏁 Starting Seeding ---');
+  console.log('--- 🏁 Starting MongoDB Seeding ---');
 
   // 1. Create Super Admin
   const superAdmin = await prisma.user.upsert({
@@ -37,7 +37,6 @@ async function main() {
   console.log('✅ Salon Admin User Created');
 
   // 3. Create Salon
-  // Note: We use upsert on 'slug' because it is unique
   const salonName = 'Desi Dude Kogarah';
   const salonSlug = slugify(salonName, { lower: true, strict: true });
 
@@ -62,16 +61,14 @@ async function main() {
         thursday: { open: '09:00', close: '20:00' },
         friday: { open: '09:00', close: '20:00' },
         saturday: { open: '09:00', close: '17:00' },
-        sunday: true,
+        sunday: { open: 'Closed', close: 'Closed' }, // MongoDB prefers objects over booleans in mixed JSON
       },
-      // Link the admin to the salon membership
       memberships: {
         create: {
           userId: salonAdminUser.id,
           role: SalonRole.salon_admin,
         },
       },
-      // Add a default service
       services: {
         create: {
           name: 'Men\'s Haircut',
