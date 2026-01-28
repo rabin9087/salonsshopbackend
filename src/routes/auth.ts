@@ -173,7 +173,7 @@ router.post('/verify-otp', asyncHandler(async (req, res) => {
 
   const jwtToken = jwt.sign({
       userId: user.id,
-      phone: user.phone,
+      phone: user.phone || '', // Default to an empty string if user.phone is null
       roles: roles.map((r: UserRole) => r.role),
       salonMemberships: memberships.map((m: SalonMembership) => ({ salonId: m.salonId, role: m.role })),
     } satisfies JWTTokenPayload,

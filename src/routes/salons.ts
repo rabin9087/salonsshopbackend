@@ -84,7 +84,7 @@ router.get('/', optionalAuth, asyncHandler(async (req: AuthenticatedRequest, res
   ]);
 
   // Hide contact info based on permissions
-  const sanitizedSalons = salons.map((salon: { id: string; phone?: string; email?: string; }) => {
+  const sanitizedSalons = salons.map(salon => {
     const canViewContact = 
       isSalonStaff(req, salon.id) || 
       isSuperAdmin(req);
@@ -463,7 +463,7 @@ router.get('/:salonId/slots', asyncHandler(async (req, res) => {
   });
 
   res.json({
-    slots: slots.map((slot: { startTime: Date; endTime: Date; capacity: number; bookedCount: number; }) => ({
+    slots: slots.map(slot => ({
       ...slot,
       startTime: slot.startTime.toISOString().substring(11, 19),
       endTime: slot.endTime.toISOString().substring(11, 19),
