@@ -59,10 +59,10 @@ router.post('/send-otp', otpRateLimiter, asyncHandler(async (req, res) => {
   });
 
   // Send OTP via Twilio (or mock in development)
-  if (process.env.NODE_ENV === 'production') {
-    await sendOtp(phone, otp);
+  if (process.env.NODE_ENV === 'development') {
+      console.log(`📱 DEV OTP for ${phone}: ${otp}`);
   } else {
-    console.log(`📱 DEV OTP for ${phone}: ${otp}`);
+      await sendOtp(phone, otp);
   }
 
   res.json({
