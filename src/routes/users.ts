@@ -72,7 +72,7 @@ router.get('/me/memberships', asyncHandler(async (req: AuthenticatedRequest, res
   });
 
   res.json({
-    memberships: memberships.map(m => ({
+    memberships: memberships.map((m: { salonId: string; role: string; salon: { name: string } }) => ({
       salonId: m.salonId,
       role: m.role,
       salonName: m.salon.name,

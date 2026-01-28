@@ -2,21 +2,13 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
-import { errorHandler } from './src/middleware/errorHandler.js';
+import { errorHandler } from './middleware/errorHandler.js';
 import mongoSanitize from "express-mongo-sanitize";
 import morgan from "morgan";
-import router from './src/routes/router.index.js'
+import router from './routes/router.index.js'
 
 // Load environment variables
 dotenv.config();
-
-const allowedOrigins = [
-  'http://localhost:5173', // Vite default
-  'http://localhost:8080', // Common port
-  'http://localhost:3000', // Next.js default
-  'http://192.168.1.10',   // CHANGE THIS to your actual local IP for mobile testing
-  // Add your Lovable or production domain here
-];
 
 const app = express();
 const PORT = process.env.PORT || 5001;

@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import multer from 'multer';
 import { asyncHandler, createError } from '../middleware/errorHandler.js';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { upload, uploadToS3 } from '../lib/aws.js';
