@@ -155,15 +155,31 @@ router.post('/verify-otp', asyncHandler(async (req, res) => {
   ]);
 
   // Generate JWT
+  interface UserRole {
+    role: string;
+  }
+
+  interface SalonMembership {
+    salonId: string;
+    role: string;
+  }
+
+  interface JWTTokenPayload {
+    userId: string;
+    phone: string;
+    roles: string[];
+    salonMemberships: SalonMembership[];
+  }
+
   const jwtToken = jwt.sign({
-          userId: user.id,
-          phone: user.phone,
-          roles: roles.map(r => r.role),
-          salonMemberships: memberships.map(m => ({ salonId: m.salonId, role: m.role })),
-        } satisfies JWTPayload,
-        process.env.JWT_SECRET as string, // Ensure JWT_SECRET is defined and typed
-        { expiresIn: '60d' } // Ensure options are correctly structured
-      );
+      userId: user.id,
+      phone: user.phone,
+      roles: roles.map((r: UserRole) => r.role),
+      salonMemberships: memberships.map((m: SalonMembership) => ({ salonId: m.salonId, role: m.role })),
+    } satisfies JWTTokenPayload,
+    process.env.JWT_SECRET as string, // Ensure JWT_SECRET is defined and typed
+    { expiresIn: '60d' } // Ensure options are correctly structured
+  );
 
   res.json({
     success: true,
