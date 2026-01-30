@@ -7,15 +7,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ==========================================
+// USER & AUTHENTICATION
+// ==========================================
+
 model User {
   id                String            @id @default(auto()) @map("_id") @db.ObjectId
   phone             String?           @unique
-  email             String?
+  email             String?           @unique
   fullName          String            @map("full_name")
   avatarUrl         String?           @map("avatar_url")
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at")
   
+  // Relations
   completedBookings Booking[]         @relation("BookingCompleter")
   bookings          Booking[]
   invitedMembers    SalonMembership[] @relation("MembershipInviter")
@@ -23,6 +28,7 @@ model User {
   approvedSalons    Salon[]           @relation("SalonApprover")
   createdSalons     Salon[]           @relation("SalonCreator")
   roles             UserRole[]
+  subscriptions     Subscription[]    // Added: B2C Subscriptions
 
   @@map("user_profiles")
 }
@@ -63,6 +69,10 @@ model RateLimit {
   @@map("rate_limits")
 }
 
+// ==========================================
+// SALON MANAGEMENT
+// ==========================================
+
 model Salon {
   id                  String            @id @default(auto()) @map("_id") @db.ObjectId
   name                String
@@ -72,6 +82,9 @@ model Salon {
   city                String
   phone               String?
   email               String?
+  facebookPage        String?
+  instagramPage       String?
+  whatsAppNumber      String?
   imageUrl            String?           @map("image_url")
   operatingHours      Json              @default("{}") @map("operating_hours")
   defaultSlotCapacity Int               @default(4) @map("default_slot_capacity")
@@ -82,12 +95,14 @@ model Salon {
   createdAt           DateTime          @default(now()) @map("created_at")
   updatedAt           DateTime          @default(now()) @updatedAt @map("updated_at")
   
+  // Relations
   bookings            Booking[]
   memberships         SalonMembership[]
   approver            User?             @relation("SalonApprover", fields: [approvedBy], references: [id])
   creator             User              @relation("SalonCreator", fields: [createdBy], references: [id])
   services            Service[]
   slots               Slot[]
+  subscriptions       Subscription[]    // Added: B2B Subscriptions
 
   @@map("salons")
 }
@@ -108,12 +123,43 @@ model SalonMembership {
   @@map("salon_memberships")
 }
 
+// ==========================================
+// SUBSCRIPTION SYSTEM
+// ==========================================
+
+model Subscription {
+  id            String             @id @default(auto()) @map("_id") @db.ObjectId
+  type          SubscriptionType
+  status        SubscriptionStatus @default(active)
+  
+  // Polymorphic-like association
+  salonId       String?            @db.ObjectId @map("salon_id")
+  salon         Salon?             @relation(fields: [salonId], references: [id])
+  
+  userId        String?            @db.ObjectId @map("user_id")
+  user          User?              @relation(fields: [userId], references: [id])
+
+  // Payment Integration Fields
+  externalId    String?            @unique @map("external_subscription_id")
+  startDate     DateTime           @default(now()) @map("start_date")
+  endDate       DateTime?          @map("end_date")
+  
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  @@map("subscriptions")
+}
+
+// ==========================================
+// BOOKING & SERVICES
+// ==========================================
+
 model Service {
   id              String    @id @default(auto()) @map("_id") @db.ObjectId
   salonId         String    @map("salon_id") @db.ObjectId
   name            String
   description     String?
-  price           Float     @default(0) // MongoDB uses Float for decimals in Prisma
+  price           Float     @default(0)
   durationMinutes Int       @default(30) @map("duration_minutes")
   showPrice       Boolean   @default(true) @map("show_price")
   isActive        Boolean   @default(true) @map("is_active")
@@ -168,6 +214,23 @@ model Booking {
   user        User          @relation(fields: [userId], references: [id])
 
   @@map("bookings")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum SubscriptionType {
+  SALON_BASIC
+  SALON_PRO
+  USER_VIP
+}
+
+enum SubscriptionStatus {
+  active
+  canceled
+  expired
+  past_due
 }
 
 enum AppRole {

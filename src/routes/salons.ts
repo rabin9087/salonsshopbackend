@@ -23,6 +23,9 @@ const createSalonSchema = z.object({
   city: z.string().min(2).max(100),
   phone: z.string().optional(),
   email: z.string().email().optional(),
+  facebookPage: z.string().email().optional(),
+  instagramPage: z.string().email().optional(),
+  whatsAppNumber: z.string().email().optional(),
   operatingHours: z.record(z.object({
     open: z.string(),
     close: z.string(),
@@ -136,6 +139,9 @@ router.get('/:salonId', optionalAuth, asyncHandler(async (req: AuthenticatedRequ
       ...salon,
       phone: canViewContact ? salon.phone : undefined,
       email: canViewContact ? salon.email : undefined,
+      facebookPage: canViewContact ? salon.facebookPage : undefined,
+      instagramPage: canViewContact ? salon.instagramPage : undefined,
+      whatsAppNumber: canViewContact ? salon.whatsAppNumber : undefined,
     },
   });
 }));
@@ -254,6 +260,9 @@ router.put('/:salonId', authMiddleware, asyncHandler(async (req: AuthenticatedRe
     city: z.string().min(2).max(100).optional(),
     phone: z.string().optional(),
     email: z.string().email().optional(),
+    facebookPage: z.string().email().optional(),
+    instagramPage: z.string().email().optional(),
+    whatsAppNumber: z.string().email().optional(),
     imageUrl: z.string().url().optional().nullable(),
     operatingHours: z.record(z.object({
       open: z.string(),
