@@ -102,63 +102,72 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
  * Create a new booking
  */
 router.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
+  // 1. Update Validation: MongoDB uses ObjectIds, not UUIDs
   const schema = z.object({
-    salonId: z.string().uuid(),
-    serviceId: z.string().uuid(),
-    slotId: z.string().uuid(),
+    salonId: z.string().refine((val) => /^[0-9a-fA-F]{24}$/.test(val), {
+      message: "Invalid Salon ID format (must be ObjectId)",
+    }),
+    serviceId: z.string().refine((val) => /^[0-9a-fA-F]{24}$/.test(val), {
+      message: "Invalid Service ID format",
+    }),
+    slotId: z.string().refine((val) => /^[0-9a-fA-F]{24}$/.test(val), {
+      message: "Invalid Slot ID format",
+    }),
     bookingDate: z.string(), // "2026-04-04"
-    startTime: z.string(),   // "14:30:00"
+    startTime: z.string(),   // "14:30"
     notes: z.string().max(500).optional(),
   });
 
   const data = schema.parse(req.body);
 
-  // 1. Validate salon is approved
+  // 2. Database lookups (unchanged logic, just uses ObjectIds now)
   const salon = await prisma.salon.findUnique({ where: { id: data.salonId } });
   if (!salon || salon.status !== 'approved') {
-    throw createError('Salon is not available for bookings', 400);
+    throw createError('Salon is not available', 400);
   }
 
-  // 2. Validate service is active
   const service = await prisma.service.findUnique({ where: { id: data.serviceId } });
   if (!service || !service.isActive) {
     throw createError('Service is not available', 400);
   }
 
-  // 3. Validate slot has capacity
   const slot = await prisma.slot.findUnique({ where: { id: data.slotId } });
   if (!slot || slot.bookedCount >= slot.capacity) {
-    throw createError('Slot is not available', 400);
+    throw createError('Slot is fully booked', 400);
   }
 
-  // 4. Check for duplicate booking
-  const existing = await prisma.booking.findFirst({
-    where: {
-      userId: req.user!.userId,
-      slotId: data.slotId,
-      status: 'booked',
-    },
-  });
-  if (existing) {
-    throw createError('You already have a booking for this slot', 400);
-  }
+  console.log(salon, service, slot, data)
+  // 3. Time Calculation
+  // MongoDB stores full Date objects. We combine the date and time strings.
+  const timeString = data.startTime.length === 5 ? `${data.startTime}:00` : data.startTime;
 
-  // 5. Calculate startTime and endTime exactly
-  const [startH, startM] = data.startTime.split(':').map(Number);
-  const totalStartMinutes = startH * 60 + startM;
-  const totalEndMinutes = totalStartMinutes + service.durationMinutes;
+// 2. Combine into a valid ISO string
+const startISO = `${data.bookingDate}T${timeString}Z`; 
 
-  const endH = Math.floor(totalEndMinutes / 60) % 24;
-  const endM = totalEndMinutes % 60;
+// 3. Create the Date object
+const startDateTime = new Date(startISO);
 
-  // Use the "1970-01-01T...Z" format to ensure Prisma/Postgres treats it as a pure TIME
-  const timeStartStr = `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}:00Z`;
-  const timeEndStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00Z`;
+// 4. Safety Check
+if (isNaN(startDateTime.getTime())) {
+  throw createError(`Invalid Date construction from: ${startISO}`, 400);
+}
 
-  // 6. Generate QR code
-  const qrCode = `${crypto.randomBytes(4).toString('hex')}-${crypto.randomUUID().slice(0, 8)}`.toUpperCase();
+// 5. Calculate End Time
+const endDateTime = new Date(startDateTime.getTime() + service.durationMinutes * 60000);
 
-  // 7. Execute Transaction
+  // 4. Unique QR Code
+  const qrCode = crypto.randomBytes(8).toString('hex').toUpperCase();
+
+// Assume data.startTime is "14:30" and data.bookingDate is "2026-04-04"
+
+
+// Safety check: If the strings were malformed, startDateTime will be "Invalid Date"
+if (isNaN(startDateTime.getTime())) {
+  throw createError('Invalid date or time format provided', 400);
+}
+
+  // 5. Execute Transaction
+  // NOTE: MongoDB Atlas/Replica Sets are REQUIRED for this $transaction to work.
   const [booking] = await prisma.$transaction([
     prisma.booking.create({
       data: {
@@ -166,10 +175,9 @@ router.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
         salonId: data.salonId,
         serviceId: data.serviceId,
         slotId: data.slotId,
-        // Normalize date to UTC midnight
         bookingDate: new Date(`${data.bookingDate}T00:00:00Z`),
-        startTime: new Date(`1970-01-01T${timeStartStr}`),
-        endTime: new Date(`1970-01-01T${timeEndStr}`),
+        startTime: startDateTime,
+        endTime: endDateTime,
         qrCode,
         notes: data.notes,
         status: 'booked',
@@ -185,12 +193,7 @@ router.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
     }),
   ]);
 
-  // Only send the response ONCE at the end
-  res.status(201).json({
-    success: true,
-    message: 'Booking created successfully',
-    booking,
-  });
+  res.status(201).json({ success: true, booking });
 }));
 
 /**

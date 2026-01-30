@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 5001;
 // Security middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CORS_ORIGIN,
+  origin: process.env.CORS_ORIGIN || "http://192.168.1.108:8080 || http://192.168.2.179:8080",
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
 }));
@@ -47,9 +47,12 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📚 API docs: See docs/API_SPECIFICATION.md`);
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`-----------------------------------------------`);
+  console.log(`🚀 Backend Server running on:`);
+  console.log(`🏠 Local:   http://localhost:${PORT}`);
+  console.log(`🌐 Network: http://192.168.1.108:${PORT}`);
+  console.log(`-----------------------------------------------`);
 });
 
 export default app;
