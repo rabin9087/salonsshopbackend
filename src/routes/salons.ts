@@ -23,9 +23,9 @@ const createSalonSchema = z.object({
   city: z.string().min(2).max(100),
   phone: z.string().optional(),
   email: z.string().email().optional(),
-  facebookPage: z.string().email().optional(),
-  instagramPage: z.string().email().optional(),
-  whatsAppNumber: z.string().email().optional(),
+  facebookPage: z.string().optional(),
+  instagramPage: z.string().optional(),
+  whatsAppNumber: z.string().optional(),
   operatingHours: z.record(z.object({
     open: z.string(),
     close: z.string(),
@@ -248,7 +248,6 @@ router.post('/', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, 
  */
 router.put('/:salonId', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const salonId = req.params.salonId;
-
   if (!isSalonAdmin(req, salonId)) {
     throw createError('You do not have permission to update this salon', 403);
   }
@@ -260,9 +259,10 @@ router.put('/:salonId', authMiddleware, asyncHandler(async (req: AuthenticatedRe
     city: z.string().min(2).max(100).optional(),
     phone: z.string().optional(),
     email: z.string().email().optional(),
-    facebookPage: z.string().email().optional(),
-    instagramPage: z.string().email().optional(),
-    whatsAppNumber: z.string().email().optional(),
+    facebookPage: z.string().url().optional().or(z.literal('')),
+    instagramPage: z.string().url().optional().or(z.literal('')),
+    // WhatsApp is usually a phone string, not a URL
+    whatsAppNumber: z.string().optional().or(z.literal('')), 
     imageUrl: z.string().url().optional().nullable(),
     operatingHours: z.record(z.object({
       open: z.string(),
@@ -272,18 +272,31 @@ router.put('/:salonId', authMiddleware, asyncHandler(async (req: AuthenticatedRe
     defaultSlotCapacity: z.number().min(1).max(50).optional(),
   });
 
-  const data = updateSchema.parse(req.body);
+  // Log body for debugging if validation fails
 
-  const salon = await prisma.salon.update({
-    where: { id: salonId },
-    data,
-  });
+  try {
+    const data = updateSchema.parse(req.body);
+    
+    const salon = await prisma.salon.update({
+      where: { id: salonId },
+      data,
+    });
 
-  res.json({
-    success: true,
-    message: 'Salon updated successfully',
-    salon,
-  });
+    res.json({
+      success: true,
+      message: 'Salon updated successfully',
+      salon,
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        details: err.errors.map(e => ({ field: e.path[0], message: e.message }))
+      });
+    }
+    throw err;
+  }
 }));
 
 /**
