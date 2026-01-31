@@ -14,8 +14,16 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 // Security middleware
 app.use(helmet());
+
+const allowedOrigins = [
+  process.env.CORS_ORIGIN1, 
+  process.env.CORS_ORIGIN2, 
+  "http://192.168.1.108:8080", 
+  "http://192.168.2.179:8080"
+].filter((origin): origin is string => Boolean(origin)); // Ensures only strings are included
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || "http://192.168.1.108:8080 || http://192.168.2.179:8080",
+  origin: allowedOrigins,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
 }));
