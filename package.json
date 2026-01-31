@@ -5,15 +5,13 @@
   "main": "dist/src/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "start": "node -r tsconfig-paths/register dist/src/index.js",
-    "build": "tsc",
-    "gcp-build": "npx prisma generate && npm run build",
+    "build": "tsc && npx tsc-alias",
+    "start": "node dist/src/index.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"
-   
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

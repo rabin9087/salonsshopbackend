@@ -5,16 +5,17 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'my-express-service' # Change this to your service name
+      - 'tidytime-backend'
       - '--source'
       - '.'
       - '--region'
       - 'us-central1'
       - '--allow-unauthenticated'
-      # This replaces the Render "Pre-deploy" and "Start" commands
+      # Updated syntax: shell -c "commands"
       - '--command'
       - '/bin/sh'
       - '--args'
-      - '-c,npx prisma db push && npx prisma db seed && npm start'
+      - '-c'
+      - 'npx prisma db push && npx prisma db seed && npm start'
 
-timeout: '1200s' # Prisma migrations can take time
+timeout: '1200s'
