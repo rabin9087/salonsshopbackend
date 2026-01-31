@@ -11,7 +11,7 @@ import {
 } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import slugify from 'slugify';
-import { upload, uploadToS3 } from '@/lib/aws.js';
+import { upload, uploadToS3 } from '../lib/aws.js';
 
 const router = Router();
 
