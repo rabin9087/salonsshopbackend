@@ -23,6 +23,7 @@ const createSalonSchema = z.object({
   city: z.string().min(2).max(100),
   phone: z.string().optional(),
   email: z.string().email().optional(),
+  websiteURL: z.string().optional(),
   facebookPage: z.string().optional(),
   instagramPage: z.string().optional(),
   whatsAppNumber: z.string().optional(),
@@ -259,6 +260,7 @@ router.put('/:salonId', authMiddleware, asyncHandler(async (req: AuthenticatedRe
     city: z.string().min(2).max(100).optional(),
     phone: z.string().optional(),
     email: z.string().email().optional(),
+    websiteURL: z.string().url().optional().or(z.literal('')),
     facebookPage: z.string().url().optional().or(z.literal('')),
     instagramPage: z.string().url().optional().or(z.literal('')),
     // WhatsApp is usually a phone string, not a URL

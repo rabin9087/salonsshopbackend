@@ -82,6 +82,7 @@ model Salon {
   city                String
   phone               String?
   email               String?
+  websiteURL        String?
   facebookPage        String?
   instagramPage       String?
   whatsAppNumber      String?
