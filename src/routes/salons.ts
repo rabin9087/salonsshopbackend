@@ -27,6 +27,8 @@ const createSalonSchema = z.object({
   facebookPage: z.string().optional(),
   instagramPage: z.string().optional(),
   whatsAppNumber: z.string().optional(),
+  contractAmount: z.number().optional(),
+  nextDueDate: z.coerce.date().optional(),
   operatingHours: z.record(z.object({
     open: z.string(),
     close: z.string(),
@@ -249,6 +251,8 @@ router.post('/', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, 
  */
 router.put('/:salonId', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const salonId = req.params.salonId;
+    console.log(salonId)
+
   if (!isSalonAdmin(req, salonId)) {
     throw createError('You do not have permission to update this salon', 403);
   }
@@ -264,7 +268,9 @@ router.put('/:salonId', authMiddleware, asyncHandler(async (req: AuthenticatedRe
     facebookPage: z.string().url().optional().or(z.literal('')),
     instagramPage: z.string().url().optional().or(z.literal('')),
     // WhatsApp is usually a phone string, not a URL
-    whatsAppNumber: z.string().optional().or(z.literal('')), 
+    whatsAppNumber: z.string().optional().or(z.literal('')),
+    contractAmount: z.number().optional(),
+    nextDueDate: z.coerce.date().optional(),
     imageUrl: z.string().url().optional().nullable(),
     operatingHours: z.record(z.object({
       open: z.string(),
@@ -278,7 +284,6 @@ router.put('/:salonId', authMiddleware, asyncHandler(async (req: AuthenticatedRe
 
   try {
     const data = updateSchema.parse(req.body);
-    
     const salon = await prisma.salon.update({
       where: { id: salonId },
       data,

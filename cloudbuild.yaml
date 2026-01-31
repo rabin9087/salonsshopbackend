@@ -1,0 +1,20 @@
+steps:
+  # Step 1: Deploy from source using Buildpacks
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'my-express-service' # Change this to your service name
+      - '--source'
+      - '.'
+      - '--region'
+      - 'us-central1'
+      - '--allow-unauthenticated'
+      # This replaces the Render "Pre-deploy" and "Start" commands
+      - '--command'
+      - '/bin/sh'
+      - '--args'
+      - '-c,npx prisma db push && npx prisma db seed && npm start'
+
+timeout: '1200s' # Prisma migrations can take time
