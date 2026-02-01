@@ -1,8 +1,8 @@
-# Tidy Time Salon - Backend API Specification
+# Salons Vibes - Backend API Specification
 
 ## Overview
 
-This document defines the REST API specification for the Tidy Time Salon backend built with Express.js and Node.js.
+This document defines the REST API specification for the Salons Vibes backend built with Express.js and Node.js.
 
 **Base URL:** `http://localhost:5000/api` (configurable via `VITE_API_URL`)
 

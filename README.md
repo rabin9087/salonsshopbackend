@@ -1,6 +1,6 @@
-# Tidy Time Salon - Backend API
+# Salon Vibes - Backend API
 
-Express.js + Prisma backend for the Tidy Time Salon booking system.
+Express.js + Prisma backend for the Salon Vibes booking system.
 
 ## Quick Start
 

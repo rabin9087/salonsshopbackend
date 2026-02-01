@@ -7,6 +7,7 @@ import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { otpRateLimiter } from '../middleware/rateLimit.js';
 import { prisma } from '../lib/prisma.js';
 import { sendOtp } from '../lib/twilio.js';
+import { Gender } from '@prisma/client';
 
 interface JWTPayload {
   userId: string;
@@ -32,7 +33,11 @@ const verifyOtpSchema = z.object({
   token: z.string().min(1, 'Session token required'),
   mode: z.enum(['login', 'signup']),
   fullName: z.string().min(2).max(100).optional(),
-});
+  email: z.preprocess(
+    (val) => (val === "" ? undefined : val),
+    z.string().email('Invalid email format').toLowerCase().optional()
+  ),
+gender: z.enum(['male', 'female', 'other']).optional(),});
 
 /**
  * POST /api/auth/send-otp
@@ -78,7 +83,7 @@ router.post('/send-otp', otpRateLimiter, asyncHandler(async (req, res) => {
  * Verify OTP and authenticate user
  */
 router.post('/verify-otp', asyncHandler(async (req, res) => {
-  const { phone, otp, token, mode, fullName } = verifyOtpSchema.parse(req.body);
+  const { phone, otp, token, mode, fullName, gender, email } = verifyOtpSchema.parse(req.body);
 
   // Find OTP session
   const session = await prisma.otpSession.findUnique({
@@ -132,7 +137,7 @@ router.post('/verify-otp', asyncHandler(async (req, res) => {
     if (!fullName) {
       throw createError('Full name required for signup', 400, 'NAME_REQUIRED');
     }
-
+const emailValue = (email && email.trim() !== "") ? email.toLowerCase() : null;
     user = await prisma.user.create({
       data: {
         phone,
@@ -140,6 +145,8 @@ router.post('/verify-otp', asyncHandler(async (req, res) => {
         roles: {
           create: { role: 'user' },
         },
+        gender: gender as Gender,
+        email: emailValue || undefined,
       },
     });
   } else {

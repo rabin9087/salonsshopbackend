@@ -49,13 +49,10 @@ router.get('/', optionalAuth, asyncHandler(async (req: AuthenticatedRequest, res
 
   const where: any = {};
 
-  // Non-super admins can only see approved salons (plus their own pending)
+  // --- Filtering Logic (Same as your original) ---
   if (!isSuperAdmin(req)) {
     if (includeOwn === 'true' && req.user) {
-      where.OR = [
-        { status: 'approved' },
-        { createdBy: req.user.userId },
-      ];
+      where.OR = [{ status: 'approved' }, { createdBy: req.user.userId }];
     } else {
       where.status = 'approved';
     }
@@ -63,23 +60,16 @@ router.get('/', optionalAuth, asyncHandler(async (req: AuthenticatedRequest, res
     where.status = status;
   }
 
-  if (city) {
-    where.city = { contains: city as string, mode: 'insensitive' };
-  }
-
+  if (city) where.city = { contains: city as string, mode: 'insensitive' };
   if (search) {
-    where.AND = [
-      where.AND || {},
-      {
-        OR: [
-          { name: { contains: search as string, mode: 'insensitive' } },
-          { description: { contains: search as string, mode: 'insensitive' } },
-        ],
-      },
+    where.OR = [
+      { name: { contains: search as string, mode: 'insensitive' } },
+      { description: { contains: search as string, mode: 'insensitive' } },
     ];
   }
 
-  const [salons, total] = await Promise.all([
+  // 1. Fetch Salons and the User's Favorite IDs in parallel
+  const [salons, total, userFavorites] = await Promise.all([
     prisma.salon.findMany({
       where,
       skip,
@@ -87,23 +77,40 @@ router.get('/', optionalAuth, asyncHandler(async (req: AuthenticatedRequest, res
       orderBy: { createdAt: 'desc' },
     }),
     prisma.salon.count({ where }),
+    // Only fetch favorites if a user is logged in
+    req.user 
+      ? prisma.favorite.findMany({
+          where: { userId: req.user.userId },
+          select: { salonId: true }
+        })
+      : Promise.resolve([])
   ]);
 
-  // Hide contact info based on permissions
-  const sanitizedSalons = salons.map(salon => {
-    const canViewContact = 
-      isSalonStaff(req, salon.id) || 
-      isSuperAdmin(req);
+  // 2. Create a Set of favorite IDs for O(1) lookup
+  const favoriteSalonIds = userFavorites.map(f => f.salonId);
+  const favoriteIds = new Set(userFavorites.map(f => f.salonId));
 
-    return {
-      ...salon,
-      phone: canViewContact ? salon.phone : undefined,
-      email: canViewContact ? salon.email : undefined,
-    };
-  });
+  // 3. Sanitize, tag with isFavorite, and Sort
+  const processedSalons = salons
+    .map(salon => {
+      const canViewContact = isSalonStaff(req, salon.id) || isSuperAdmin(req);
+      return {
+        ...salon,
+        isFavorite: favoriteIds.has(salon.id), // Add the favorite flag
+        phone: canViewContact ? salon.phone : undefined,
+        email: canViewContact ? salon.email : undefined,
+      };
+    })
+    .sort((a, b) => {
+      // Sort logic: if 'a' is favorite and 'b' isn't, 'a' comes first (-1)
+      if (a.isFavorite && !b.isFavorite) return -1;
+      if (!a.isFavorite && b.isFavorite) return 1;
+      return 0; // Maintain createdAt order otherwise
+    });
 
   res.json({
-    data: sanitizedSalons,
+    data: processedSalons,
+    favoriteSalonIds,
     pagination: {
       page: pageNum,
       limit: limitNum,
@@ -154,7 +161,6 @@ router.get('/:salonId', optionalAuth, asyncHandler(async (req: AuthenticatedRequ
  */
 
 router.get('/name/:slug', optionalAuth, asyncHandler(async (req: AuthenticatedRequest, res) => {
-
   const { slug } = req.params;
 
   if (!slug) {
@@ -162,29 +168,40 @@ router.get('/name/:slug', optionalAuth, asyncHandler(async (req: AuthenticatedRe
   }
 
   const salon = await prisma.salon.findFirst({
-    where: { slug: req.params.slug },
+    where: { slug },
   });
-
-  console.log(salon)
 
   if (!salon) {
     throw createError('Salon not found', 404);
   }
 
-  // Non-super admins can only see approved salons (or their own)
+  // Permission checks
   if (!isSuperAdmin(req) && salon.status !== 'approved') {
     if (!req.user || salon.createdBy !== req.user.userId) {
       throw createError('Salon not found', 404);
     }
   }
 
-  const canViewContact = 
-    isSalonStaff(req, salon.id) || 
-    isSuperAdmin(req);
+  // 1. Check if the user has favorited this salon
+  let isFavorite = false;
+  if (req.user) {
+    const favorite = await prisma.favorite.findUnique({
+      where: {
+        userId_salonId: {
+          userId: req.user.userId,
+          salonId: salon.id,
+        },
+      },
+    });
+    isFavorite = !!favorite;
+  }
+
+  const canViewContact = isSalonStaff(req, salon.id) || isSuperAdmin(req);
 
   res.json({
     salon: {
       ...salon,
+      isFavorite, // Added true/false field
       phone: canViewContact ? salon.phone : undefined,
       email: canViewContact ? salon.email : undefined,
     },
@@ -378,6 +395,44 @@ router.post('/:salonId/services', optionalAuth, asyncHandler(async (req, res) =>
 
   res.json({ services });
 }));
+
+// Toggle Favorite: POST /api/salons/:salonId/favorite
+router.post('/:salonId/favorite', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  const { salonId } = req.params;
+  const userId = req.user?.userId; // From your auth middleware
+
+  try {
+    // 1. Check if the salon exists first
+    const salon = await prisma.salon.findUnique({ where: { id: salonId } });
+    if (!salon) return res.status(404).json({ error: "Salon not found" });
+        if (!userId) return res.status(404).json({ error: "User not found" });
+
+
+    // 2. Try to find an existing favorite using the @@unique constraint
+    const existingFavorite = await prisma.favorite.findUnique({
+      where: {
+        userId_salonId: { salonId, userId }
+      }
+    });
+
+    if (existingFavorite) {
+      // If it exists, DELETE it (Unfavorite)
+      await prisma.favorite.delete({
+        where: { id: existingFavorite.id }
+      });
+      return res.json({ success: true, isFavorite: false, message: "Removed from favorites" });
+    } else {
+      // If it doesn't exist, CREATE it (Favorite)
+      await prisma.favorite.create({
+        data: { userId, salonId }
+      });
+      return res.json({ success: true, isFavorite: true, message: "Added to favorites" });
+    }
+  } catch (error) {
+    console.error("Favorite Error:", error);
+    res.status(500).json({ error: "Failed to update favorites" });
+  }
+});
 
 router.post('/image', authMiddleware, upload.single('file'), asyncHandler(async (req: AuthenticatedRequest, res) => {
     if (!req.file) {

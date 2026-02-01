@@ -1,7 +1,7 @@
 {
   "name": "tidytime-backend",
   "version": "1.0.0",
-  "description": "Tidy Time Salon - Express.js Backend API",
+  "description": "Salons Vibes - Express.js Backend API",
   "main": "dist/src/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

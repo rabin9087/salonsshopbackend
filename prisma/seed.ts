@@ -17,6 +17,7 @@ async function main() {
       roles: {
         create: { role: AppRole.super_admin },
       },
+      gender: "male"
     },
   });
   console.log('✅ Super Admin Created');

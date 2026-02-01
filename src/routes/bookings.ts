@@ -7,8 +7,10 @@ import {
   AuthenticatedRequest, 
   isSuperAdmin,
   isSalonStaff,
+  optionalAuth,
 } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
+import { sendBookingConfirmation } from '@/lib/twilio.js';
 
 const router = Router();
 
@@ -101,77 +103,57 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
  * POST /api/bookings
  * Create a new booking
  */
-router.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
-  // 1. Update Validation: MongoDB uses ObjectIds, not UUIDs
+router.post('/', optionalAuth, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  // 1. Validation
   const schema = z.object({
-    salonId: z.string().refine((val) => /^[0-9a-fA-F]{24}$/.test(val), {
-      message: "Invalid Salon ID format (must be ObjectId)",
-    }),
-    serviceId: z.string().refine((val) => /^[0-9a-fA-F]{24}$/.test(val), {
-      message: "Invalid Service ID format",
-    }),
-    slotId: z.string().refine((val) => /^[0-9a-fA-F]{24}$/.test(val), {
-      message: "Invalid Slot ID format",
-    }),
-    bookingDate: z.string(), // "2026-04-04"
-    startTime: z.string(),   // "14:30"
+    salonId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid Salon ID format"),
+    serviceId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid Service ID format"),
+    slotId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid Slot ID format"),
+    bookingDate: z.string(), 
+    startTime: z.string(),   
     notes: z.string().max(500).optional(),
   });
 
   const data = schema.parse(req.body);
+  const userId = req.user?.userId;
 
-  // 2. Database lookups (unchanged logic, just uses ObjectIds now)
-  const salon = await prisma.salon.findUnique({ where: { id: data.salonId } });
-  if (!salon || salon.status !== 'approved') {
-    throw createError('Salon is not available', 400);
-  }
+  if (!userId) throw createError('Authentication required', 401);
 
-  const service = await prisma.service.findUnique({ where: { id: data.serviceId } });
-  if (!service || !service.isActive) {
-    throw createError('Service is not available', 400);
-  }
+  // 2. Optimized Parallel Lookups
+  // We fetch everything in one go to reduce latency
+  const [user, salon, service, slot] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId } }),
+    prisma.salon.findUnique({ 
+      where: { id: data.salonId },
+      include: { 
+        memberships: { 
+          take: 1, 
+          include: { user: { select: { phone: true } } } 
+        } 
+      }
+    }),
+    prisma.service.findUnique({ where: { id: data.serviceId } }),
+    prisma.slot.findUnique({ where: { id: data.slotId } })
+  ]);
 
-  const slot = await prisma.slot.findUnique({ where: { id: data.slotId } });
-  if (!slot || slot.bookedCount >= slot.capacity) {
-    throw createError('Slot is fully booked', 400);
-  }
+  // 3. Robust Validation Checks
+  if (!user) throw createError('User not found', 404);
+  if (!salon || salon.status !== 'approved') throw createError('Salon unavailable', 400);
+  if (!service || !service.isActive) throw createError('Service unavailable', 400);
+  if (!slot || slot.bookedCount >= slot.capacity) throw createError('Slot full', 400);
 
-  console.log(salon, service, slot, data)
-  // 3. Time Calculation
-  // MongoDB stores full Date objects. We combine the date and time strings.
-  const timeString = data.startTime.length === 5 ? `${data.startTime}:00` : data.startTime;
+  // 4. Time Calculation
+  const startDateTime = new Date(`${data.bookingDate}T${data.startTime.slice(0, 5)}:00Z`);
+  if (isNaN(startDateTime.getTime())) throw createError('Invalid date/time', 400);
 
-// 2. Combine into a valid ISO string
-const startISO = `${data.bookingDate}T${timeString}Z`; 
-
-// 3. Create the Date object
-const startDateTime = new Date(startISO);
-
-// 4. Safety Check
-if (isNaN(startDateTime.getTime())) {
-  throw createError(`Invalid Date construction from: ${startISO}`, 400);
-}
-
-// 5. Calculate End Time
-const endDateTime = new Date(startDateTime.getTime() + service.durationMinutes * 60000);
-
-  // 4. Unique QR Code
+  const endDateTime = new Date(startDateTime.getTime() + service.durationMinutes * 60000);
   const qrCode = crypto.randomBytes(8).toString('hex').toUpperCase();
 
-// Assume data.startTime is "14:30" and data.bookingDate is "2026-04-04"
-
-
-// Safety check: If the strings were malformed, startDateTime will be "Invalid Date"
-if (isNaN(startDateTime.getTime())) {
-  throw createError('Invalid date or time format provided', 400);
-}
-
-  // 5. Execute Transaction
-  // NOTE: MongoDB Atlas/Replica Sets are REQUIRED for this $transaction to work.
+  // 5. Atomic Transaction
   const [booking] = await prisma.$transaction([
     prisma.booking.create({
       data: {
-        userId: req.user!.userId,
+        userId,
         salonId: data.salonId,
         serviceId: data.serviceId,
         slotId: data.slotId,
@@ -184,7 +166,7 @@ if (isNaN(startDateTime.getTime())) {
       },
       include: {
         salon: { select: { name: true } },
-        service: { select: { name: true, price: true } },
+        service: { select: { name: true, price: true } }
       },
     }),
     prisma.slot.update({
@@ -192,6 +174,40 @@ if (isNaN(startDateTime.getTime())) {
       data: { bookedCount: { increment: 1 } },
     }),
   ]);
+
+  // 6. Background SMS Notification
+  // We don't 'await' this so the user gets their response faster
+  const salonAdminPhone = salon.memberships[0]?.user?.phone as string;
+  const formattedDate = new Intl.DateTimeFormat('en-AU', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(new Date(startDateTime)); 
+  const confirmationTask = async () => {
+    try {
+      const payload = {
+        phone: user.phone!,
+        customerName: user.fullName,
+        dateTime: startDateTime,
+        salonName: salon.name,
+        adminPhone: salonAdminPhone
+      };
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📱 [DEV SMS]:', payload);
+        console.log(formattedDate)
+      } else {
+        await sendBookingConfirmation(payload);
+      }
+    } catch (err) {
+      console.error('SMS Background Task Failed:', err);
+    }
+  };
+
+  confirmationTask(); // Execute in background
 
   res.status(201).json({ success: true, booking });
 }));
@@ -230,7 +246,8 @@ router.get('/:bookingId', asyncHandler(async (req: AuthenticatedRequest, res) =>
  * POST /api/bookings/:bookingId/cancel
  * Cancel a booking
  */
-router.post('/:bookingId/cancel', asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/:bookingId/cancel', optionalAuth, asyncHandler(async (req: AuthenticatedRequest, res) => {
+ 
   const booking = await prisma.booking.findUnique({
     where: { id: req.params.bookingId },
   });
@@ -316,6 +333,88 @@ router.post('/:bookingId/complete', asyncHandler(async (req: AuthenticatedReques
     message: markNoShow ? 'Booking marked as no-show' : 'Booking completed successfully',
     booking: updated,
   });
+}));
+
+/**
+ * POST /api/bookings/:bookingId/complete
+ * Complete a booking (check-in)
+ */
+router.patch('/:bookingId/update', asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const schema = z.object({
+    serviceStarted: z.boolean().optional(),
+    serviceId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
+    slotId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
+    bookingDate: z.string().optional(), // Expecting ISO string or YYYY-MM-DD
+  });
+
+  const data = schema.parse(req.body);
+  const { bookingId } = req.params;
+
+  // 1. Fetch current booking
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+  });
+
+  if (!booking) {
+    throw createError('Booking not found', 404);
+  }
+
+  // 2. Security: Only staff or super-admin
+  if (!isSalonStaff(req, booking.salonId) && !isSuperAdmin(req)) {
+    throw createError('Unauthorized: Salon staff access required', 403);
+  }
+
+  // 3. Build dynamic update object
+  const updatePayload: any = {};
+
+  // Handle Service Start Logic
+  if (data.serviceStarted) {
+    if (booking.status !== 'booked') {
+      throw createError('Service can only be started for "booked" appointments', 400);
+    }
+    updatePayload.status = 'in_progress';
+    updatePayload.serviceStartedAt = new Date();
+  }
+
+  // Handle Rescheduling / Updates
+  if (data.serviceId) updatePayload.serviceId = data.serviceId;
+  if (data.slotId) updatePayload.slotId = data.slotId;
+  if (data.bookingDate) updatePayload.bookingDate = new Date(data.bookingDate);
+
+  // 4. Update Slot Count if slotId changed
+  if (data.slotId && data.slotId !== booking.slotId) {
+    await prisma.$transaction([
+      // Decrement old slot
+      prisma.slot.update({
+        where: { id: booking.slotId },
+        data: { bookedCount: { decrement: 1 } }
+      }),
+      // Increment new slot
+      prisma.slot.update({
+        where: { id: data.slotId },
+        data: { bookedCount: { increment: 1 } }
+      }),
+      // Update booking
+      prisma.booking.update({
+        where: { id: bookingId },
+        data: updatePayload
+      })
+    ]);
+  } else {
+    // Standard update
+    const updated = await prisma.booking.update({
+      where: { id: bookingId },
+      data: updatePayload,
+    });
+    
+    return res.json({
+      success: true,
+      message: data.serviceStarted ? 'Service has started' : 'Booking updated successfully',
+      booking: updated,
+    });
+  }
+
+  res.json({ success: true, message: 'Booking updated with new slot' });
 }));
 
 /**
