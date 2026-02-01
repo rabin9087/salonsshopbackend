@@ -1,4 +1,4 @@
-import { AppRole, SalonStatus, SalonRole, PrismaClient } from '@prisma/client';
+import { AppRole, SalonStatus, SalonRole, PrismaClient, Gender } from '@prisma/client';
 import slugify from 'slugify';
 
 const prisma = new PrismaClient();
@@ -17,7 +17,7 @@ async function main() {
       roles: {
         create: { role: AppRole.super_admin },
       },
-      gender: "male"
+      gender: "male" as Gender
     },
   });
   console.log('✅ Super Admin Created');
