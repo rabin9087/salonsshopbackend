@@ -373,7 +373,7 @@ router.patch('/:bookingId/update', asyncHandler(async (req: AuthenticatedRequest
       throw createError('Service can only be started for "booked" appointments', 400);
     }
     updatePayload.status = 'in_progress';
-    updatePayload.serviceStartedAt = new Date();
+    updatePayload.serviceStarted = new Date();
   }
 
   // Handle Rescheduling / Updates
