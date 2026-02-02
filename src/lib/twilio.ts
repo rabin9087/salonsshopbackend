@@ -25,7 +25,7 @@ export async function sendOtp(phone: string, otp: string): Promise<void> {
 
 
   await client.messages.create({
-    body: `Your Salon Vibes verification code is: ${otp}. Valid for 10 minutes.`,
+    body: `Your Salons Vibes verification code is: ${otp}. Valid for 10 minutes.`,
     from: process.env.TWILIO_PHONE_NUMBER,
     to: phone,
   });
@@ -35,7 +35,7 @@ export async function sendBookingConfirmation({
   phone,
   customerName,
   dateTime,
-  salonName = "Salon Vibes",
+  salonName = "Salons Vibes",
   adminPhone
 }: BookingConfirmationProps): Promise<void> {
   // 1. Guard Clauses

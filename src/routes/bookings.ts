@@ -315,7 +315,7 @@ router.post('/:bookingId/complete', asyncHandler(async (req: AuthenticatedReques
     throw createError('Salon staff access required', 403);
   }
 
-  if (booking.status !== 'booked') {
+  if (booking.status !== 'booked' && booking.status !== 'in_progress') {
     throw createError('Only booked appointments can be completed', 400);
   }
 
