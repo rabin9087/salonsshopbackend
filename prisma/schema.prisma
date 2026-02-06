@@ -12,17 +12,18 @@ datasource db {
 // ==========================================
 
 model User {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  phone     String?  @unique
-  email     String?  
-  gender    Gender?
-  fullName  String   @map("full_name")
-  avatarUrl String?  @map("avatar_url")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
-
+  id                String            @id @default(auto()) @map("_id") @db.ObjectId
+  phone             String?           @unique
+  email             String?
+  gender            Gender?
+  fullName          String            @map("full_name")
+  avatarUrl         String?           @map("avatar_url")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at")
+  description       String?
   // Relations
   completedBookings Booking[]         @relation("BookingCompleter")
+  assignedTasks    Booking[] @relation("StaffBookings")
   bookings          Booking[]
   invitedMembers    SalonMembership[] @relation("MembershipInviter")
   salonMemberships  SalonMembership[]
@@ -110,6 +111,7 @@ model Salon {
   slots         Slot[]
   subscriptions Subscription[] // Added: B2B Subscriptions
   Favorite      Favorite[]
+
   @@map("salons")
 }
 
@@ -198,28 +200,30 @@ model Service {
 }
 
 model Slot {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  salonId     String   @map("salon_id") @db.ObjectId
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  salonId     String    @map("salon_id") @db.ObjectId
   date        DateTime
-  startTime   DateTime @map("start_time")
-  endTime     DateTime @map("end_time")
-  capacity    Int      @default(3)
-  bookedCount Int      @default(0) @map("booked_count")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  bookings Booking[]
-  salon    Salon     @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  startTime   DateTime  @map("start_time")
+  endTime     DateTime  @map("end_time")
+  capacity    Int       @default(3)
+  bookedCount Int       @default(0) @map("booked_count")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  staffId     String?   @map("staff_id") @db.ObjectId
+  bookings    Booking[]
+  salon       Salon     @relation(fields: [salonId], references: [id], onDelete: Cascade)
 
   @@unique([salonId, date, startTime])
   @@map("slots")
 }
 
 model Booking {
-  id             String        @id @default(auto()) @map("_id") @db.ObjectId
-  userId         String        @map("user_id") @db.ObjectId
-  salonId        String        @map("salon_id") @db.ObjectId
-  serviceId      String        @map("service_id") @db.ObjectId
-  slotId         String        @map("slot_id") @db.ObjectId
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String  @map("user_id") @db.ObjectId
+  salonId   String  @map("salon_id") @db.ObjectId
+  serviceId String  @map("service_id") @db.ObjectId
+  slotId    String @map("slot_id") @db.ObjectId
+  staffId   String? @map("staff_id") @db.ObjectId
+
   bookingDate    DateTime      @map("booking_date")
   startTime      DateTime      @map("start_time")
   endTime        DateTime      @map("end_time")
@@ -233,6 +237,7 @@ model Booking {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at")
 
+  staff     User?   @relation("StaffBookings", fields: [staffId], references: [id])
   completer User?   @relation("BookingCompleter", fields: [completedBy], references: [id])
   salon     Salon   @relation(fields: [salonId], references: [id])
   service   Service @relation(fields: [serviceId], references: [id])

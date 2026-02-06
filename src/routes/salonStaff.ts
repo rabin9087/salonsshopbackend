@@ -29,6 +29,8 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
           id: true,
           fullName: true,
           phone: true,
+          avatarUrl: true,
+          description: true
         },
       },
     },

@@ -83,6 +83,8 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
         salon: { select: { id: true, name: true } },
         service: { select: { id: true, name: true, price: true } },
         user: { select: { id: true, fullName: true, phone: true } },
+        staff: { select: { id: true, fullName: true, phone: true } },
+
       },
     }),
     prisma.booking.count({ where }),
@@ -109,6 +111,7 @@ router.post('/', optionalAuth, asyncHandler(async (req: AuthenticatedRequest, re
     salonId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid Salon ID format"),
     serviceId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid Service ID format"),
     slotId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid Slot ID format"),
+    staffId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid Slot ID format").optional(),
     bookingDate: z.string(), 
     startTime: z.string(),   
     notes: z.string().max(500).optional(),
@@ -157,6 +160,7 @@ router.post('/', optionalAuth, asyncHandler(async (req: AuthenticatedRequest, re
         salonId: data.salonId,
         serviceId: data.serviceId,
         slotId: data.slotId,
+        staffId: data.staffId || null,
         bookingDate: new Date(`${data.bookingDate}T00:00:00Z`),
         startTime: startDateTime,
         endTime: endDateTime,
@@ -171,7 +175,9 @@ router.post('/', optionalAuth, asyncHandler(async (req: AuthenticatedRequest, re
     }),
     prisma.slot.update({
       where: { id: data.slotId },
-      data: { bookedCount: { increment: 1 } },
+      data: {
+        bookedCount: { increment: 1 },
+        staffId: data.staffId  },
     }),
   ]);
 

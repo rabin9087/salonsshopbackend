@@ -228,6 +228,7 @@ router.get('/me', authMiddleware, asyncHandler(async (req: AuthenticatedRequest,
       avatarUrl: user.avatarUrl,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
+      description: user.description
     },
   });
 }));

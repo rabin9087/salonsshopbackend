@@ -34,10 +34,11 @@ router.put('/me', asyncHandler(async (req: AuthenticatedRequest, res) => {
     fullName: z.string().min(2).max(100).optional(),
     phone: z.string().regex(/^\+[1-9]\d{1,14}$/).optional(),
     avatarUrl: z.string().url().optional(),
+    description: z.string().optional(),
   });
 
   const data = schema.parse(req.body);
-
+  
   const user = await prisma.user.update({
     where: { id: req.user!.userId },
     data,
