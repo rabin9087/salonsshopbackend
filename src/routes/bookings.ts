@@ -84,7 +84,6 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
         service: { select: { id: true, name: true, price: true } },
         user: { select: { id: true, fullName: true, phone: true } },
         staff: { select: { id: true, fullName: true, phone: true } },
-
       },
     }),
     prisma.booking.count({ where }),
