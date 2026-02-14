@@ -1,3 +1,4 @@
+import prisma from '@/lib/prisma';
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
@@ -33,6 +34,7 @@ export function authMiddleware(
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload;
+    console.log("decoded:", decoded)
     req.user = decoded;
     next();
   } catch (error) {
@@ -77,11 +79,24 @@ export function isSuperAdmin(req: AuthenticatedRequest): boolean {
 /**
  * Check if user is salon admin for a specific salon
  */
-export function isSalonAdmin(req: AuthenticatedRequest, salonId: string): boolean {
+export async function isSalonAdmin(req: AuthenticatedRequest, salonId: string): Promise<boolean> {
+  // 1. Super admins bypass all checks
   if (isSuperAdmin(req)) return true;
-  return req.user?.salonMemberships?.some(
-    m => m.salonId === salonId && m.role === 'salon_admin'
-  ) ?? false;
+
+  const userId = req.user?.userId;
+  if (!userId) return false;
+
+  // 2. Check the database for the specific membership
+  const membership = await prisma.salonMembership.findFirst({
+    where: {
+      salonId,
+      userId,
+      role: 'salon_admin',
+    },
+  });
+
+  // 3. If a record exists, they are an admin
+  return !!membership;
 }
 
 /**

@@ -203,8 +203,6 @@ router.get('/name/:slug', optionalAuth, asyncHandler(async (req: AuthenticatedRe
     salon: {
       ...salon,
       isFavorite, // Added true/false field
-      phone: canViewContact ? salon.phone : undefined,
-      email: canViewContact ? salon.email : undefined,
     },
   });
 }));
@@ -268,25 +266,27 @@ router.post('/', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, 
  * Update salon details
  */
 router.put('/:salonId', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const salonId = req.params.salonId;
-    console.log(salonId)
+  const { salonId } = req.params;
+  const userId = req.user?.userId;
 
   if (!isSalonAdmin(req, salonId)) {
     throw createError('You do not have permission to update this salon', 403);
   }
 
+  // 2. Schema Definition (Move this outside the handler in production for performance)
   const updateSchema = z.object({
     name: z.string().min(2).max(100).optional(),
-    description: z.string().max(1000).optional(),
+    description: z.string().max(1000).optional().nullable(),
     address: z.string().min(5).max(200).optional(),
     city: z.string().min(2).max(100).optional(),
     phone: z.string().optional(),
     email: z.string().email().optional(),
-    websiteURL: z.string().url().optional().or(z.literal('')),
-    facebookPage: z.string().url().optional().or(z.literal('')),
-    instagramPage: z.string().url().optional().or(z.literal('')),
-    // WhatsApp is usually a phone string, not a URL
-    whatsAppNumber: z.string().optional().or(z.literal('')),
+    // Changed .url() to .optional() for social links to allow usernames or partial strings
+    websiteURL: z.string().optional().nullable(),
+    facebookPage: z.string().optional().nullable(),
+    instagramPage: z.string().optional().nullable(),
+    tiktokPage: z.string().optional().nullable(), // Added missing field
+    whatsAppNumber: z.string().optional().nullable(),
     contractAmount: z.number().optional(),
     nextDueDate: z.coerce.date().optional(),
     imageUrl: z.string().url().optional().nullable(),
@@ -298,30 +298,19 @@ router.put('/:salonId', authMiddleware, asyncHandler(async (req: AuthenticatedRe
     defaultSlotCapacity: z.number().min(1).max(50).optional(),
   });
 
-  // Log body for debugging if validation fails
+  // 3. Validation and Update
+  const data = updateSchema.parse(req.body);
 
-  try {
-    const data = updateSchema.parse(req.body);
-    const salon = await prisma.salon.update({
-      where: { id: salonId },
-      data,
-    });
+  const salon = await prisma.salon.update({
+    where: { id: salonId },
+    data,
+  });
 
-    res.json({
-      success: true,
-      message: 'Salon updated successfully',
-      salon,
-    });
-  } catch (err) {
-    if (err instanceof z.ZodError) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        details: err.errors.map(e => ({ field: e.path[0], message: e.message }))
-      });
-    }
-    throw err;
-  }
+  res.json({
+    success: true,
+    message: 'Salon updated successfully',
+    salon,
+  });
 }));
 
 /**
