@@ -19,7 +19,7 @@ const allowedOrigins = [
   process.env.CORS_ORIGIN1, 
   process.env.CORS_ORIGIN2, 
   "http://192.168.1.108:8080", 
-  "http://192.168.2.179:8080",
+  "http://192.168.2.205:8080",
   "http://localhost:8080"
 ].filter((origin): origin is string => Boolean(origin)); // Ensures only strings are included
 

@@ -27,6 +27,7 @@ const createSalonSchema = z.object({
   facebookPage: z.string().optional(),
   instagramPage: z.string().optional(),
   whatsAppNumber: z.string().optional(),
+  tiktokPage: z.string().optional(),
   contractAmount: z.number().optional(),
   nextDueDate: z.coerce.date().optional(),
   operatingHours: z.record(z.object({

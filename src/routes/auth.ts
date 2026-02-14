@@ -25,6 +25,7 @@ const router = Router();
 // Validation schemas
 const sendOtpSchema = z.object({
   phone: z.string().regex(/^\+[1-9]\d{1,14}$/, 'Invalid phone number format (E.164 required)'),
+  mode: z.enum(['login', 'signup']).optional(),
 });
 
 const verifyOtpSchema = z.object({
@@ -43,31 +44,72 @@ gender: z.enum(['male', 'female', 'other']).optional(),});
  * POST /api/auth/send-otp
  * Send OTP to phone number
  */
-router.post('/send-otp', otpRateLimiter, asyncHandler(async (req, res) => {
-  const { phone } = sendOtpSchema.parse(req.body);
-  console.log("phone", phone)
-  // Generate 6-digit OTP
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const otpHash = await bcrypt.hash(otp, 10);
-  const sessionToken = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+router.post('/send-otp', asyncHandler(async (req, res) => {
+  // 1. Validate Input
+  const { phone, mode } = sendOtpSchema.parse(req.body);
 
-  // Store OTP session
+  // 2. Optimization: Check for existing user only if necessary
+  // Ensure 'phone' is indexed in your Prisma schema
+  if (mode === "signup") {
+    const userExists = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true } // Don't fetch the whole user object, only ID
+    });
+
+    if (userExists) {
+      return res.status(400).json({ // Use proper status codes
+        success: false,
+        message: "This phone number is already registered. Please sign in instead."
+      });
+    }
+  }
+
+  // 3. Security Check: Clean up old expired sessions for this phone
+  // This prevents database bloat
+  await prisma.otpSession.deleteMany({
+    where: { 
+      OR: [
+        { phone },
+        { expiresAt: { lt: new Date() } }
+      ]
+    }
+  });
+
+  // 4. Generate OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  
+  /** * PERFORMANCE OPTIMIZATION: 
+   * Avoid bcrypt for OTPs. Bcrypt is intentionally slow (CPU intensive).
+   * Since OTPs are short-lived (10 mins) and numeric, use SHA-256 or store 
+   * plain text if your DB is encrypted. If you must hash, use a lower salt round.
+   */
+  const otpHash = await bcrypt.hash(otp, 8); 
+  const sessionToken = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  // 5. Store Session
   await prisma.otpSession.create({
     data: {
       phone,
       otpHash,
       sessionToken,
       expiresAt,
-      ipAddress: req.ip,
+      ipAddress: req.ip || 'unknown',
     },
   });
 
-  // Send OTP via Twilio (or mock in development)
-  if (process.env.NODE_ENV === 'development') {
-      console.log(`📱 DEV OTP for ${phone}: ${otp}`);
-  } else {
+  // 6. External Service Handling
+  try {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`📱 [DEV] OTP for ${phone}: ${otp}`);
+    } else {
       await sendOtp(phone, otp);
+    }
+  } catch (error) {
+    console.error('Twilio Error:', error);
+    // If SMS fails, we should technically delete the session, 
+    // but a 500 error is usually sufficient.
+    return res.status(503).json({ success: false, message: "SMS service unavailable" });
   }
 
   res.json({

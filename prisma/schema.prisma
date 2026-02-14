@@ -23,7 +23,7 @@ model User {
   description       String?
   // Relations
   completedBookings Booking[]         @relation("BookingCompleter")
-  assignedTasks    Booking[] @relation("StaffBookings")
+  assignedTasks     Booking[]         @relation("StaffBookings")
   bookings          Booking[]
   invitedMembers    SalonMembership[] @relation("MembershipInviter")
   salonMemberships  SalonMembership[]
@@ -89,6 +89,7 @@ model Salon {
   facebookPage        String?
   instagramPage       String?
   whatsAppNumber      String?
+  tiktokPage          String?
   imageUrl            String?     @map("image_url")
   operatingHours      Json        @default("{}") @map("operating_hours")
   defaultSlotCapacity Int         @default(4) @map("default_slot_capacity")
@@ -221,7 +222,7 @@ model Booking {
   userId    String  @map("user_id") @db.ObjectId
   salonId   String  @map("salon_id") @db.ObjectId
   serviceId String  @map("service_id") @db.ObjectId
-  slotId    String @map("slot_id") @db.ObjectId
+  slotId    String  @map("slot_id") @db.ObjectId
   staffId   String? @map("staff_id") @db.ObjectId
 
   bookingDate    DateTime      @map("booking_date")
